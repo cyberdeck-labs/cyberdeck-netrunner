@@ -1,4 +1,5 @@
 # Prueft taeglich, ob es ein neues Electron (= neues Chromium / Sicherheitsfixes) gibt.
+# Laeuft taeglich um 05:17 UTC (und manuell ueber "Run workflow").
 # Wenn ja: Electron aktualisieren, Version erhoehen, taggen und den Release-Build starten.
 # Die installierten Browser bekommen das Update dann automatisch.
 name: Chromium-Update
