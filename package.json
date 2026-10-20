@@ -1,7 +1,7 @@
 {
   "name": "cyberdeck-netrunner",
   "productName": "Cyberdeck Netrunner",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Chromium-Browser im Cyberpunk-Stil (Electron)",
   "main": "src/main.js",
   "author": "Cyberdeck Labs",
@@ -67,7 +67,8 @@
         "repo": "cyberdeck-netrunner",
         "releaseType": "release"
       }
-    ]
+    ],
+    "copyright": "Copyright © 2026 Cyberdeck Labs"
   },
   "desktopName": "cyberdeck-netrunner.desktop",
   "repository": {
