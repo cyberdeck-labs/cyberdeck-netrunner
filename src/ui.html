@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src * data:; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'self' 'unsafe-inline'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src * data: crx:; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'self' 'unsafe-inline'">
 <title>Cyberdeck Netrunner</title>
 <style>
   @font-face { font-family: Orbitron; src: url(fonts/Orbitron.ttf); }
@@ -55,6 +55,10 @@
   #star.on { color:var(--yel); text-shadow:0 0 6px var(--yel); }
   .chip { font-family:STM; font-size:12px; color:var(--dim); white-space:nowrap; padding:0 6px; cursor:default; }
   .chip.g { color:#5cff8a; } .chip.y { color:var(--yel); cursor:pointer; } .chip.r { color:var(--red); }
+  browser-action-list { -webkit-app-region:no-drag; height:26px; display:flex; align-items:center; }
+  browser-action-list::part(action) { width:26px; height:26px; background-color:transparent; border:0; border-radius:0; }
+  browser-action-list::part(action):hover { background:#21091a; box-shadow:inset 0 -2px 0 var(--cyan); }
+  browser-action-list::part(badge) { font-family:STM; font-size:9px; }
   #dl { max-width:220px; overflow:hidden; text-overflow:ellipsis; cursor:pointer; }
   /* Zeile 3: Lesezeichen */
   #bmrow { height:24px; border-top:1px solid #2a0d16; overflow:hidden; gap:2px; }
@@ -78,6 +82,8 @@
     <div id="addrbox"><span class="pre">&gt; run</span><input id="addr" spellcheck="false" placeholder="adresse_oder_suche_"><span id="lock"></span></div>
     <div id="star" class="btn" title="Lesezeichen (Strg+D)">☆</div>
     <span id="dl" class="chip" hidden></span>
+    <browser-action-list id="extbar" alignment="bottom left"></browser-action-list>
+    <span id="cookie" class="chip" title="Automatisch abgelehnte Cookie-Banner">🍪 0</span>
     <span id="shield" class="chip" title="Blockierte Werbung/Tracker">⛨ …</span>
     <span id="upd" class="chip" hidden></span>
     <div id="menu" class="btn" title="Menü">≡</div>
@@ -168,6 +174,8 @@ net.onDownload((d) => {
   el.title = d.file;
   el.onclick = () => net.openDownload(d.file);
 });
+net.onCookies((n) => { $('cookie').textContent = `🍪 ${n}`; });
+net.onCookieMode((on) => { $('cookie').className = 'chip ' + (on ? 'g' : ''); $('cookie').style.textDecoration = on ? '' : 'line-through'; });
 net.onUpdate((u) => {
   const el = $('upd');
   el.hidden = u.state === 'ok';

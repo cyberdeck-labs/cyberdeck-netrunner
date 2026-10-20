@@ -29,4 +29,14 @@ contextBridge.exposeInMainWorld('net', {
   onUpdate: listen('update'),
   onVersions: listen('versions'),
   onFocusAddress: listen('focus-address'),
+  onCookies: listen('cookies'),
+  onCookieMode: listen('cookie-mode'),
+  onExtensions: listen('extensions'),
 });
+
+// <browser-action-list> fuer die Symbole installierter Chrome-Erweiterungen
+try {
+  require('electron-chrome-extensions/browser-action').injectBrowserAction();
+} catch (e) {
+  console.error('browser-action', e);
+}
