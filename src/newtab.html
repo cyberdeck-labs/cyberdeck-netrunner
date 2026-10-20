@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Neuer Tab</title>
+<style>
+  @font-face { font-family: Orbitron; src: url(fonts/Orbitron.ttf); }
+  @font-face { font-family: STM; src: url(fonts/ShareTechMono-Regular.ttf); }
+  @font-face { font-family: Rajdhani; src: url(fonts/Rajdhani-Bold.ttf); font-weight: 700; }
+  :root { --red:#ff2d3d; --cyan:#3cf0ff; --yel:#f7e733; --bg:#07020a; --panel:#12060fdd; --dim:#7a6a78; }
+  * { box-sizing:border-box; }
+  html { background:var(--bg); }
+  html, body { margin:0; min-height:100%; color:#fff; font-family:Rajdhani, sans-serif; overflow-x:hidden; }
+  body { min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:26px; padding:40px 20px 120px; position:relative; }
+  /* Hintergrund: Sonne, Skyline, Perspektiv-Gitter (statisch) */
+  #bg { position:fixed; inset:0; z-index:-1; overflow:hidden;
+        background: radial-gradient(circle at 70% 62%, rgba(255,45,61,.20), transparent 38%), linear-gradient(#0b0310, #07020a 58%, #1a0410); }
+  #bg svg { position:absolute; left:0; right:0; bottom:28vh; width:100%; height:30vh; }
+  #grid { position:absolute; left:-50%; right:-50%; bottom:0; height:28vh; transform-origin:bottom; transform:perspective(300px) rotateX(62deg);
+          background-image: linear-gradient(rgba(255,45,61,.35) 1px, transparent 1px), linear-gradient(90deg, rgba(255,45,61,.35) 1px, transparent 1px);
+          background-size:60px 40px; border-top:2px solid rgba(255,45,61,.7); }
+  body::after { content:''; position:fixed; inset:0; pointer-events:none; background:repeating-linear-gradient(to bottom, rgba(0,0,0,.18) 0 1px, transparent 1px 3px); }
+  .clock { isolation:isolate; font-family:Orbitron; font-size:min(18vw,110px); font-weight:700; line-height:1; position:relative; text-shadow:0 0 22px rgba(255,45,61,.8); }
+  .clock::before, .clock::after { content:attr(data-t); position:absolute; left:0; top:0; opacity:.75; }
+  .clock::before { color:var(--red); transform:translateX(-3px); z-index:-1; }
+  .clock::after { color:var(--cyan); transform:translateX(3px); z-index:-1; }
+  .clock.g::before { transform:translate(-7px,1px); } .clock.g::after { transform:translate(6px,-1px); }
+  .date { font-family:STM; color:var(--cyan); letter-spacing:4px; font-size:16px; margin-top:-14px; }
+  form { width:min(640px, 92vw); display:flex; align-items:center; padding:0 14px; height:52px; background:var(--panel); border:1px solid var(--cyan);
+         clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px); box-shadow:inset 0 0 20px rgba(60,240,255,.15); }
+  form:focus-within { border-color:var(--yel); }
+  form span { font-family:STM; color:var(--red); font-size:20px; padding-right:10px; }
+  form input { flex:1; background:none; border:0; outline:0; color:var(--cyan); font-family:STM; font-size:20px; }
+  form input::placeholder { color:var(--dim); }
+  #dial { display:grid; grid-template-columns:repeat(auto-fill, 120px); gap:14px; width:min(720px, 92vw); justify-content:center; }
+  .tile { height:84px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; text-decoration:none; color:#fff;
+          background:var(--panel); border:1px solid var(--red); clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px);
+          font-size:14px; letter-spacing:1px; text-transform:uppercase; padding:6px; text-align:center; }
+  .tile:hover { border-color:var(--cyan); color:var(--cyan); box-shadow:0 0 14px rgba(60,240,255,.3); }
+  .tile img { width:24px; height:24px; }
+  .tile b { font-family:Orbitron; font-size:22px; color:var(--red); font-weight:400; }
+  .tile span { max-width:100%; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+  #err { display:none; width:min(640px, 92vw); padding:16px 18px; background:var(--panel); border:1px solid var(--red); font-family:STM; color:#ffb0b6; }
+  #err h2 { font-family:Orbitron; color:var(--red); font-size:16px; letter-spacing:3px; margin:0 0 8px; }
+  .foot { position:fixed; bottom:12px; font-family:STM; font-size:11px; color:var(--dim); letter-spacing:2px; }
+</style>
+</head>
+<body>
+  <div id="bg">
+    <svg viewBox="0 0 1000 200" preserveAspectRatio="none" id="sky"></svg>
+    <div id="grid"></div>
+  </div>
+  <div id="err"><h2>// VERBINDUNG FEHLGESCHLAGEN</h2><div id="errtxt"></div></div>
+  <div class="clock" id="clock" data-t="00:00">00:00</div>
+  <div class="date" id="date"></div>
+  <form action="https://duckduckgo.com/" method="get" autocomplete="off">
+    <span>&gt; run</span><input name="q" id="q" placeholder="suche_im_netz_" autofocus>
+  </form>
+  <div id="dial"></div>
+  <div class="foot">CYBERDECK NETRUNNER // WERBEBLOCKER AKTIV</div>
+<script>
+'use strict';
+// Skyline einmal zeichnen (fester Zufall -> immer gleich)
+(() => {
+  let seed = 2077; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  let x = 0, out = '';
+  while (x < 1000) {
+    const w = 18 + rnd() * 40, h = 40 + rnd() * 150;
+    out += `<rect x="${x}" y="${200 - h}" width="${w}" height="${h}" fill="#0e0612"/>`;
+    for (let wy = 200 - h + 8; wy < 194; wy += 10) for (let wx = x + 4; wx < x + w - 4; wx += 8)
+      if (rnd() < .17) out += `<rect x="${wx}" y="${wy}" width="3" height="4" fill="rgba(60,240,255,.35)"/>`;
+    x += w + 2;
+  }
+  document.getElementById('sky').innerHTML = out;
+})();
+const days = ['SO', 'MO', 'DI', 'MI', 'DO', 'FR', 'SA'];
+function tick() {
+  const d = new Date(), p = (n) => String(n).padStart(2, '0');
+  const t = `${p(d.getHours())}:${p(d.getMinutes())}`;
+  const c = document.getElementById('clock');
+  if (c.dataset.t !== t) { c.dataset.t = t; c.textContent = t; }
+  document.getElementById('date').textContent = `${days[d.getDay()]} ${p(d.getDate())}.${p(d.getMonth() + 1)}.${d.getFullYear()}`;
+}
+tick();
+setInterval(() => { if (!document.hidden) tick(); }, 1000);
+setInterval(() => {   // seltener Glitch, nur wenn sichtbar
+  if (document.hidden) return;
+  const c = document.getElementById('clock'); c.classList.add('g'); setTimeout(() => c.classList.remove('g'), 120);
+}, 7000);
+// Fehlerseite
+const hp = new URLSearchParams(location.hash.slice(1));
+if (hp.get('error')) {
+  document.getElementById('err').style.display = 'block';
+  document.getElementById('errtxt').textContent = `${hp.get('error')}\n${hp.get('url') || ''}`;
+  document.title = 'Fehler';
+}
+// Schnellzugriffe = Lesezeichen
+fetch('bookmarks.json').then((r) => r.json()).then((bm) => {
+  const host = (u) => { try { return new URL(u).hostname; } catch { return ''; } };
+  document.getElementById('dial').innerHTML = bm.slice(0, 12).map((b) => {
+    const h = host(b.url);
+    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    return `<a class="tile" href="${esc(b.url)}"><img src="https://${esc(h)}/favicon.ico" onerror="this.outerHTML='<b>${esc((b.title || h)[0] || '?').toUpperCase()}</b>'"><span>${esc(b.title || h)}</span></a>`;
+  }).join('');
+}).catch(() => {});
+</script>
+</body>
+</html>

@@ -1,0 +1,40 @@
+# Prueft taeglich, ob es ein neues Electron (= neues Chromium / Sicherheitsfixes) gibt.
+# Wenn ja: Electron aktualisieren, Version erhoehen, taggen und den Release-Build starten.
+# Die installierten Browser bekommen das Update dann automatisch.
+name: Chromium-Update
+on:
+  schedule:
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: write
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Neues Electron?
+        id: check
+        run: |
+          CUR=$(node -p "require('./package-lock.json').packages['node_modules/electron'].version")
+          NEW=$(npm view electron version)
+          echo "Installiert: $CUR  Neueste: $NEW"
+          if [ "$CUR" != "$NEW" ]; then echo "new=$NEW" >> "$GITHUB_OUTPUT"; fi
+      - name: Aktualisieren, taggen, Release starten
+        if: steps.check.outputs.new != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm install --save-dev "electron@${{ steps.check.outputs.new }}"
+          VER=$(npm version patch --no-git-tag-version | tr -d v)
+          git config user.name "netrunner-bot"
+          git config user.email "netrunner-bot@users.noreply.github.com"
+          git commit -am "Chromium-Update: Electron ${{ steps.check.outputs.new }} (v$VER)"
+          git tag "v$VER"
+          git push origin HEAD "v$VER"
+          # Tags von GITHUB_TOKEN loesen keine Workflows aus -> Release direkt starten
+          gh workflow run release.yml --ref "v$VER"

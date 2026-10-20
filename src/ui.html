@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src * data:; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'self' 'unsafe-inline'">
+<title>Cyberdeck Netrunner</title>
+<style>
+  @font-face { font-family: Orbitron; src: url(fonts/Orbitron.ttf); }
+  @font-face { font-family: STM; src: url(fonts/ShareTechMono-Regular.ttf); }
+  @font-face { font-family: Rajdhani; src: url(fonts/Rajdhani-Bold.ttf); font-weight: 700; }
+  :root { --red:#ff2d3d; --cyan:#3cf0ff; --yel:#f7e733; --bg:#07020a; --panel:#12060f; --dim:#7a6a78; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:92px; overflow:hidden; background:var(--bg); color:#fff; font-family: Rajdhani, sans-serif; user-select:none; }
+  body::after { /* Scanlines */
+    content:''; position:fixed; inset:0; pointer-events:none;
+    background: repeating-linear-gradient(to bottom, rgba(0,0,0,.18) 0 1px, transparent 1px 3px);
+  }
+  .row { display:flex; align-items:center; gap:6px; padding:0 8px; }
+  /* Zeile 1: Tabs */
+  #tabrow { height:34px; -webkit-app-region:drag; border-bottom:1px solid #2a0d16; padding-left:6px; }
+  #logo { font-family:Orbitron; font-size:11px; letter-spacing:3px; color:var(--red); white-space:nowrap; padding-right:6px; }
+  #logo b { color:var(--cyan); font-weight:400; }
+  #tabs { display:flex; gap:4px; flex:1; min-width:0; height:100%; align-items:flex-end; overflow:hidden; }
+  .tab { -webkit-app-region:no-drag; position:relative; flex:0 1 210px; min-width:60px; height:28px; display:flex; align-items:center; gap:6px;
+         padding:0 8px 0 12px; background:#16070f; color:#cdbfcc; font-size:14px; cursor:default;
+         clip-path:polygon(10px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 10px); }
+  .tab:hover { background:#21091a; }
+  .tab.active { background:linear-gradient(#2a0b18,#12060f); color:#fff; }
+  .tab.active::before { content:''; position:absolute; left:0; right:0; top:0; height:2px; background:var(--red); box-shadow:0 0 8px var(--red); }
+  .tab .ttl { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-transform:uppercase; letter-spacing:.5px; }
+  .tab img, .tab .ph { width:14px; height:14px; flex:none; }
+  .tab .ph { border:1px solid var(--cyan); }
+  .tab .x { flex:none; color:var(--dim); font-family:STM; padding:0 3px; }
+  .tab .x:hover { color:var(--red); }
+  .spin { width:12px; height:12px; flex:none; border:2px solid var(--cyan); border-right-color:transparent; border-radius:50%; animation:sp .7s linear infinite; }
+  @keyframes sp { to { transform:rotate(360deg); } }
+  #newtab { -webkit-app-region:no-drag; color:var(--cyan); font-family:STM; font-size:20px; padding:0 8px; cursor:pointer; }
+  #newtab:hover { color:var(--yel); }
+  .wc { -webkit-app-region:no-drag; display:flex; }
+  .wc span { width:34px; text-align:center; font-family:STM; color:var(--dim); cursor:pointer; line-height:34px; }
+  .wc span:hover { color:#fff; background:#21091a; }
+  .wc span.c:hover { background:var(--red); }
+  /* Zeile 2: Navigation */
+  #navrow { height:34px; }
+  .btn { width:28px; height:26px; display:grid; place-items:center; color:var(--cyan); font-family:STM; font-size:16px; cursor:pointer; flex:none; }
+  .btn:hover { color:var(--yel); text-shadow:0 0 6px var(--yel); }
+  .btn.off { color:#3d2f3b; pointer-events:none; }
+  #addrbox { flex:1; display:flex; align-items:center; height:26px; padding:0 10px; background:var(--panel); border:1px solid var(--cyan);
+             clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px); box-shadow:inset 0 0 12px rgba(60,240,255,.12); }
+  #addrbox:focus-within { border-color:var(--yel); }
+  #addrbox .pre { font-family:STM; color:var(--red); padding-right:6px; }
+  #addr { flex:1; background:none; border:0; outline:0; color:var(--cyan); font-family:STM; font-size:14px; }
+  #addr::placeholder { color:var(--dim); }
+  #lock { font-family:STM; font-size:12px; padding-left:6px; }
+  #star.on { color:var(--yel); text-shadow:0 0 6px var(--yel); }
+  .chip { font-family:STM; font-size:12px; color:var(--dim); white-space:nowrap; padding:0 6px; cursor:default; }
+  .chip.g { color:#5cff8a; } .chip.y { color:var(--yel); cursor:pointer; } .chip.r { color:var(--red); }
+  #dl { max-width:220px; overflow:hidden; text-overflow:ellipsis; cursor:pointer; }
+  /* Zeile 3: Lesezeichen */
+  #bmrow { height:24px; border-top:1px solid #2a0d16; overflow:hidden; gap:2px; }
+  .bm { font-size:13px; color:#cdbfcc; padding:1px 8px; white-space:nowrap; cursor:pointer; letter-spacing:.5px; }
+  .bm:hover { color:var(--cyan); background:#16070f; }
+  .bm::before { content:'▸ '; color:var(--red); }
+  #bmrow .empty { font-family:STM; font-size:11px; color:var(--dim); }
+</style>
+</head>
+<body>
+  <div id="tabrow" class="row">
+    <div id="logo">NETRUNNER<b>//</b></div>
+    <div id="tabs"></div>
+    <div id="newtab" title="Neuer Tab (Strg+T)">+</div>
+    <div class="wc"><span id="wmin">—</span><span id="wmax">▢</span><span id="wclose" class="c">✕</span></div>
+  </div>
+  <div id="navrow" class="row">
+    <div id="back" class="btn" title="Zurück (Alt+←)">◀</div>
+    <div id="fwd" class="btn" title="Vor (Alt+→)">▶</div>
+    <div id="reload" class="btn" title="Neu laden (Strg+R)">⟳</div>
+    <div id="addrbox"><span class="pre">&gt; run</span><input id="addr" spellcheck="false" placeholder="adresse_oder_suche_"><span id="lock"></span></div>
+    <div id="star" class="btn" title="Lesezeichen (Strg+D)">☆</div>
+    <span id="dl" class="chip" hidden></span>
+    <span id="shield" class="chip" title="Blockierte Werbung/Tracker">⛨ …</span>
+    <span id="upd" class="chip" hidden></span>
+    <div id="menu" class="btn" title="Menü">≡</div>
+  </div>
+  <div id="bmrow" class="row"></div>
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+let state = { active: null, tabs: [] };
+let bookmarks = [];
+let editing = false;
+
+function esc(s) { return String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+function renderTabs() {
+  const box = $('tabs');
+  box.innerHTML = state.tabs.map((t) => `
+    <div class="tab ${t.id === state.active ? 'active' : ''}" data-id="${t.id}" title="${esc(t.title)}">
+      ${t.loading ? '<div class="spin"></div>' : t.favicon ? `<img src="${esc(t.favicon)}" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'ph'}))">` : '<div class="ph"></div>'}
+      <span class="ttl">${esc(t.title || 'NEUER TAB')}</span><span class="x" data-x="${t.id}">✕</span>
+    </div>`).join('');
+  const t = state.tabs.find((x) => x.id === state.active);
+  if (!t) return;
+  if (!editing) $('addr').value = t.url || '';
+  $('back').classList.toggle('off', !t.canBack);
+  $('fwd').classList.toggle('off', !t.canFwd);
+  $('reload').textContent = t.loading ? '✕' : '⟳';
+  const https = (t.url || '').startsWith('https://');
+  $('lock').textContent = t.url ? (https ? '🔒' : '⚠') : '';
+  $('lock').style.color = https ? '#5cff8a' : '#f7e733';
+  const on = bookmarks.some((b) => b.url === t.url);
+  $('star').textContent = on ? '★' : '☆';
+  $('star').classList.toggle('on', on);
+  document.title = t.title || 'Cyberdeck Netrunner';
+}
+
+function renderBookmarks() {
+  $('bmrow').innerHTML = bookmarks.length
+    ? bookmarks.map((b) => `<span class="bm" data-url="${esc(b.url)}" title="${esc(b.url)}">${esc(b.title).toUpperCase()}</span>`).join('')
+    : '<span class="empty">// KEINE LESEZEICHEN – ★ ODER STRG+D</span>';
+  renderTabs();
+}
+
+$('tabs').addEventListener('mousedown', (e) => {
+  const x = e.target.closest('[data-x]');
+  const tab = e.target.closest('.tab');
+  if (!tab) return;
+  const id = +tab.dataset.id;
+  if (x || e.button === 1) { net.closeTab(id); e.preventDefault(); return; }
+  if (e.button === 0) net.activateTab(id);
+});
+$('newtab').onclick = () => net.newTab();
+$('back').onclick = () => net.back();
+$('fwd').onclick = () => net.forward();
+$('reload').onclick = () => net.reload();
+$('star').onclick = () => net.toggleBookmark();
+$('menu').onclick = () => net.mainMenu();
+$('wmin').onclick = () => net.win('min');
+$('wmax').onclick = () => net.win('max');
+$('wclose').onclick = () => net.win('close');
+$('upd').onclick = () => { if ($('upd').dataset.state === 'ready') net.installUpdate(); };
+
+const addr = $('addr');
+addr.addEventListener('focus', () => { editing = true; setTimeout(() => addr.select(), 0); });
+addr.addEventListener('blur', () => { editing = false; renderTabs(); });
+addr.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { net.navigate(addr.value); addr.blur(); }
+  if (e.key === 'Escape') addr.blur();
+});
+$('bmrow').addEventListener('mousedown', (e) => {
+  const b = e.target.closest('.bm');
+  if (!b) return;
+  if (e.button === 2) net.bookmarkMenu(b.dataset.url);
+  else net.openBookmark(b.dataset.url, e.button === 1 || e.ctrlKey);
+});
+
+net.onTabs((s) => { state = s; renderTabs(); });
+net.onBookmarks((b) => { bookmarks = b; renderBookmarks(); });
+net.onFocusAddress(() => { addr.focus(); });
+net.onBlocked((n) => { $('shield').textContent = `⛨ ${n}`; });
+net.onAdblock((s) => { $('shield').className = 'chip ' + (s === 'AKTIV' ? 'g' : 'r'); if (s !== 'AKTIV') $('shield').textContent = '⛨ AUS'; });
+net.onDownload((d) => {
+  const el = $('dl');
+  el.hidden = false;
+  const pct = d.total ? Math.round(d.received / d.total * 100) : 0;
+  el.className = 'chip ' + (d.state === 'completed' ? 'g' : d.state === 'progressing' ? 'y' : 'r');
+  el.textContent = d.state === 'completed' ? `⇩ ${d.name} ✓` : d.state === 'progressing' ? `⇩ ${d.name} ${pct}%` : `⇩ ${d.name} ✕`;
+  el.title = d.file;
+  el.onclick = () => net.openDownload(d.file);
+});
+net.onUpdate((u) => {
+  const el = $('upd');
+  el.hidden = u.state === 'ok';
+  el.dataset.state = u.state;
+  el.textContent = '⟲ ' + u.text;
+  el.title = u.detail || '';
+  el.className = 'chip ' + (u.state === 'ready' ? 'y' : u.state === 'error' ? 'r' : '');
+});
+net.ready();
+</script>
+</body>
+</html>
