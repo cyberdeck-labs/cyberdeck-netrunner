@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('net', {
   toggleBookmark: send('toggle-bookmark'),
   openBookmark: send('open-bookmark'),
   bookmarkMenu: send('bookmark-menu'),
+  bookmarkOverflow: send('bookmark-overflow'),
   mainMenu: send('main-menu'),
   openDownload: send('open-download'),
   win: send('win'),

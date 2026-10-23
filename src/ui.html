@@ -62,7 +62,13 @@
   #dl { max-width:220px; overflow:hidden; text-overflow:ellipsis; cursor:pointer; }
   /* Zeile 3: Lesezeichen */
   #bmrow { height:24px; border-top:1px solid #2a0d16; overflow:hidden; gap:2px; }
-  .bm { font-size:13px; color:#cdbfcc; padding:1px 8px; white-space:nowrap; cursor:pointer; letter-spacing:.5px; }
+  .bm { font-size:13px; color:#cdbfcc; padding:1px 8px; white-space:nowrap; cursor:pointer; letter-spacing:.5px; flex:none;
+        max-width:190px; overflow:hidden; text-overflow:ellipsis; }
+  .bm.hide { display:none; }
+  #bmlist { display:flex; align-items:center; gap:2px; flex:1; min-width:0; overflow:hidden; }
+  #bmmore { flex:none; font-family:STM; font-size:14px; color:var(--yel); padding:0 10px; cursor:pointer; letter-spacing:1px; }
+  #bmmore:hover { color:#000; background:var(--yel); }
+  #bmmore[hidden] { display:none; }
   .bm:hover { color:var(--cyan); background:#16070f; }
   .bm::before { content:'▸ '; color:var(--red); }
   #bmrow .empty { font-family:STM; font-size:11px; color:var(--dim); }
@@ -88,7 +94,7 @@
     <span id="upd" class="chip" hidden></span>
     <div id="menu" class="btn" title="Menü">≡</div>
   </div>
-  <div id="bmrow" class="row"></div>
+  <div id="bmrow" class="row"><div id="bmlist"></div><span id="bmmore" title="Weitere Lesezeichen" hidden>»</span></div>
 <script>
 'use strict';
 const $ = (id) => document.getElementById(id);
@@ -122,11 +128,33 @@ function renderTabs() {
 }
 
 function renderBookmarks() {
-  $('bmrow').innerHTML = bookmarks.length
-    ? bookmarks.map((b) => `<span class="bm" data-url="${esc(b.url)}" title="${esc(b.url)}">${esc(b.title).toUpperCase()}</span>`).join('')
+  $('bmlist').innerHTML = bookmarks.length
+    ? bookmarks.map((b) => `<span class="bm" data-url="${esc(b.url)}" title="${esc(b.title)}\n${esc(b.url)}">${esc(b.title).toUpperCase()}</span>`).join('')
     : '<span class="empty">// KEINE LESEZEICHEN – ★ ODER STRG+D</span>';
+  fitBookmarks();
   renderTabs();
 }
+// Was nicht in die Leiste passt, wird ausgeblendet und landet im »-Menü (wie bei Chrome)
+let hiddenBm = [];
+function fitBookmarks() {
+  const list = $('bmlist'), more = $('bmmore');
+  const items = [...list.querySelectorAll('.bm')];
+  items.forEach((el) => el.classList.remove('hide'));
+  more.hidden = true;
+  hiddenBm = [];
+  if (!items.length || list.scrollWidth <= list.clientWidth) return;
+  more.hidden = false; // Platz für » einrechnen
+  const limit = list.getBoundingClientRect().right;
+  for (const el of items) {
+    if (el.getBoundingClientRect().right > limit) { el.classList.add('hide'); hiddenBm.push(el.dataset.url); }
+  }
+}
+window.addEventListener('resize', fitBookmarks);
+$('bmmore').addEventListener('mousedown', (e) => {
+  const r = $('bmmore').getBoundingClientRect();
+  net.bookmarkOverflow(hiddenBm, Math.round(r.left), Math.round(r.bottom));
+  e.preventDefault();
+});
 
 $('tabs').addEventListener('mousedown', (e) => {
   const x = e.target.closest('[data-x]');

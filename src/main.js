@@ -625,6 +625,15 @@ function setupIpc() {
     if (extensions) sendExtensions();
   });
   ipcMain.handle('get-bookmarks', () => bookmarks);
+  ipcMain.on('bookmark-overflow', (_e, urls, x, y) => {
+    const list = (Array.isArray(urls) ? urls : []).map((u) => bookmarks.find((b) => b.url === u)).filter(Boolean);
+    if (!list.length) return;
+    Menu.buildFromTemplate(list.map((b) => ({
+      label: b.title.length > 60 ? b.title.slice(0, 58) + '…' : b.title,
+      // Klick oeffnet im aktuellen Tab, mit Strg in einem neuen Tab
+      click: (_mi, _w, ev) => (ev?.ctrlKey ? createTab(b.url) : active()?.view.webContents.loadURL(b.url)),
+    }))).popup({ window: win, x: Number(x) || undefined, y: Number(y) || undefined });
+  });
   ipcMain.on('bookmark-menu', (_e, url) => {
     Menu.buildFromTemplate([
       { label: 'In neuem Tab öffnen', click: () => createTab(url) },
@@ -740,6 +749,9 @@ app.whenReady().then(async () => {
     console.log('IMPORTFF', JSON.stringify(r));
     const n = (await session.defaultSession.cookies.get({})).length;
     console.log('COOKIES-IN-SESSION', n);
+  }
+  if (process.env.NETRUNNER_UIEVAL) { // Test-Hook: Ausdruck in der Oberflaeche auswerten
+    setTimeout(() => ui.webContents.executeJavaScript(process.env.NETRUNNER_UIEVAL).then((r) => console.log('UIEVAL', JSON.stringify(r))).catch((e) => console.log('UIEVAL-ERR', e.message)), 3000);
   }
   if (process.env.NETRUNNER_THEN) setTimeout(() => active()?.view.webContents.loadURL(process.env.NETRUNNER_THEN), 4000); // Test-Hook
   if (process.env.NETRUNNER_CERTGO) { // Test-Hook: Knopf auf der Zertifikats-Warnseite (once|remember|back)
