@@ -72,6 +72,69 @@ function saveSettings() {
   fs.writeFileSync(setFile(), JSON.stringify(settings, null, 2));
 }
 
+// ───────────── Selbstsignierte Zertifikate (z. B. FortiGate, Router, Lab-Server) ─────────────
+// Wie in Chrome: Warnseite mit Details, Weiter nur nach Klick. Die Ausnahme gilt nur fuer
+// genau diesen Host:Port UND genau dieses Zertifikat (Fingerabdruck). Aendert sich das
+// Zertifikat, kommt die Warnung wieder.
+const certFile = () => path.join(dataDir(), 'cert-exceptions.json');
+let certSaved = {};            // dauerhaft: host -> { fp, subject, issuer, added }
+const certSession = {};        // nur bis zum Beenden
+const certPending = new Map(); // `${wcId}|${host}` -> Details des abgelehnten Zertifikats
+function loadCertExceptions() {
+  try { certSaved = JSON.parse(fs.readFileSync(certFile(), 'utf8')) || {}; } catch { certSaved = {}; }
+}
+function saveCertExceptions() {
+  fs.mkdirSync(dataDir(), { recursive: true });
+  fs.writeFileSync(certFile(), JSON.stringify(certSaved, null, 2));
+}
+const hostOf = (u) => { try { const x = new URL(u); return x.protocol === 'https:' ? x.host : ''; } catch { return ''; } };
+const certException = (host) => certSession[host] || certSaved[host] || null;
+const certAllowed = (host, fp) => !!host && certException(host)?.fp === fp;
+
+function setupCertificates() {
+  loadCertExceptions();
+  app.on('certificate-error', (event, wc, url, error, cert, callback) => {
+    const host = hostOf(url);
+    if (certAllowed(host, cert.fingerprint)) { event.preventDefault(); callback(true); return; }
+    certPending.set(`${wc.id}|${host}`, {
+      url, host, error, fp: cert.fingerprint,
+      subject: cert.subjectName || cert.subject?.commonName || '',
+      issuer: cert.issuerName || cert.issuer?.commonName || '',
+      validStart: cert.validStart, validExpiry: cert.validExpiry,
+    });
+    callback(false); // Standard: ablehnen -> Warnseite (did-fail-load)
+  });
+  // Klick auf "Trotzdem fortfahren" auf der internen Warnseite
+  ipcMain.on('cert-proceed', (e, d) => {
+    const wc = e.sender;
+    if (!tabs.some((t) => t.view.webContents === wc) || !isNewtab(wc.getURL())) return; // nur von der internen Seite
+    const host = hostOf(d?.url);
+    const p = certPending.get(`${wc.id}|${host}`);
+    if (!p || p.fp !== d.fp) return; // nur das Zertifikat, das wirklich angezeigt wurde
+    const entry = { fp: p.fp, subject: p.subject, issuer: p.issuer, added: new Date().toISOString() };
+    if (d.remember) { certSaved[host] = entry; saveCertExceptions(); } else certSession[host] = entry;
+    certPending.delete(`${wc.id}|${host}`);
+    wc.loadURL(p.url);
+  });
+  ipcMain.on('cert-back', (e) => {
+    const wc = e.sender;
+    if (!tabs.some((t) => t.view.webContents === wc)) return;
+    // zur letzten Seite VOR dem Versuch (Warnseite und den abgelehnten Host ueberspringen)
+    const h = wc.navigationHistory;
+    let bad = '';
+    try { bad = new URLSearchParams(new URL(wc.getURL()).hash.slice(1)).get('host') || ''; } catch { /* egal */ }
+    const entries = h.getAllEntries();
+    let i = h.getActiveIndex() - 1;
+    while (i >= 0 && ((isNewtab(entries[i].url) && entries[i].url.includes('#cert=')) || (bad && hostOf(entries[i].url) === bad))) i--;
+    if (i >= 0) h.goToIndex(i); else wc.loadURL(NEWTAB);
+  });
+}
+function forgetCertException(host) {
+  delete certSession[host];
+  if (certSaved[host]) { delete certSaved[host]; saveCertExceptions(); }
+  pushTabs();
+}
+
 // ───────────── Cookie-Banner automatisch ablehnen (DuckDuckGo Autoconsent) ─────────────
 let acScript = null;
 let acRules = null;
@@ -198,6 +261,7 @@ function pushTabs() {
     active: activeId,
     tabs: tabs.map((t) => ({
       id: t.id, title: t.title, url: isNewtab(t.url) ? '' : t.url, loading: t.loading, favicon: t.favicon,
+      certWarn: !!certException(hostOf(t.url)),
       canBack: t.view.webContents.navigationHistory.canGoBack(),
       canFwd: t.view.webContents.navigationHistory.canGoForward(),
     })),
@@ -241,10 +305,19 @@ function createTab(url = NEWTAB, activate = true) {
   wc.on('did-navigate', onNav);
   wc.on('did-navigate-in-page', onNav);
   wc.on('did-fail-load', (_e, code, desc, u, isMain) => {
-    if (isMain && code !== -3) {
-      t.loading = false;
-      wc.loadURL(`${NEWTAB}#error=${encodeURIComponent(desc)}&url=${encodeURIComponent(u)}`);
+    if (!isMain || code === -3) return;
+    t.loading = false;
+    const p = code <= -200 && code > -300 ? certPending.get(`${wc.id}|${hostOf(u)}`) : null;
+    if (p) { // Zertifikatsfehler (-2xx): Warnseite mit Details
+      const q = new URLSearchParams({
+        cert: desc, url: p.url, host: p.host, fp: p.fp, subject: p.subject, issuer: p.issuer,
+        from: p.validStart ? new Date(p.validStart * 1000).toLocaleDateString('de-AT') : '',
+        to: p.validExpiry ? new Date(p.validExpiry * 1000).toLocaleDateString('de-AT') : '',
+      });
+      wc.loadURL(`${NEWTAB}#${q}`);
+      return;
     }
+    wc.loadURL(`${NEWTAB}#error=${encodeURIComponent(desc)}&url=${encodeURIComponent(u)}`);
   });
   // Links mit target=_blank / window.open -> neuer Tab
   wc.setWindowOpenHandler(({ url: u }) => { createTab(u, true); return { action: 'deny' }; });
@@ -461,6 +534,18 @@ function setupIpc() {
       })) : [{ label: '(noch keine installiert)', enabled: false }]),
     ];
   };
+  const certMenu = () => {
+    const all = { ...certSaved, ...certSession };
+    const hosts = Object.keys(all);
+    if (!hosts.length) return [{ label: '(keine – Warnung kommt bei unsicheren Zertifikaten)', enabled: false }];
+    return hosts.map((h) => ({
+      label: `${h}${certSession[h] ? '  (nur diese Sitzung)' : ''}`,
+      submenu: [
+        { label: `Zertifikat: ${all[h].subject || '?'}`, enabled: false },
+        { label: 'Ausnahme entfernen (wirkt nach Neustart)', click: () => forgetCertException(h) },
+      ],
+    }));
+  };
   ipcMain.on('main-menu', () => {
     const v = process.versions;
     Menu.buildFromTemplate([
@@ -471,6 +556,7 @@ function setupIpc() {
       { label: 'Cookie-Banner automatisch ablehnen', type: 'checkbox', checked: settings.cookieBlock,
         click: (mi) => { settings.cookieBlock = mi.checked; saveSettings(); send('cookie-mode', settings.cookieBlock); } },
       { label: 'Erweiterungen', submenu: extMenu() },
+      { label: 'Zertifikat-Ausnahmen', submenu: certMenu() },
       { type: 'separator' },
       { label: 'Nach Updates suchen', click: () => (updater ? updater.checkForUpdates().catch(() => {}) : setupUpdates()) },
       { label: `Netrunner ${app.getVersion()}  ·  Chromium ${v.chrome}  ·  Electron ${v.electron}`, enabled: false },
@@ -486,6 +572,7 @@ app.whenReady().then(async () => {
   loadBookmarks();
   loadSettings();
   setupAutoconsent();
+  setupCertificates();
   // Electron-Kennung aus dem User-Agent entfernen (Chrome Web Store, Google-Login)
   const ses = session.defaultSession;
   ses.setUserAgent(ses.getUserAgent().replace(/ (Electron|cyberdeck-netrunner|Cyberdeck Netrunner)\/\S+/g, ''));
@@ -530,6 +617,13 @@ app.whenReady().then(async () => {
   layout();
   if (process.env.NETRUNNER_CLICKEXT) { // Test-Hook: erstes Erweiterungs-Symbol anklicken
     setTimeout(() => ui.webContents.executeJavaScript("document.querySelector('browser-action-list').shadowRoot.querySelector('.action')?.dispatchEvent(new MouseEvent('click', {bubbles: true}))").catch(() => {}), 7000);
+  }
+  if (process.env.NETRUNNER_THEN) setTimeout(() => active()?.view.webContents.loadURL(process.env.NETRUNNER_THEN), 4000); // Test-Hook
+  if (process.env.NETRUNNER_CERTGO) { // Test-Hook: Knopf auf der Zertifikats-Warnseite (once|remember|back)
+    const c = process.env.NETRUNNER_CERTGO;
+    setTimeout(() => active()?.view.webContents.executeJavaScript(c === 'back' ? "document.getElementById('certback').click()"
+      : `document.getElementById('remember').checked = ${c === 'remember'}; document.getElementById('certgo').click()`).catch((e) => console.log('certgo', e.message)),
+    process.env.NETRUNNER_THEN ? 7000 : 3500);
   }
   if (process.env.NETRUNNER_CLICKADD) { // Test-Hook: im Web Store auf "Hinzufuegen" klicken
     setTimeout(() => active()?.view.webContents.executeJavaScript("[...document.querySelectorAll('button')].find(b => /Hinzuf|Add to/.test(b.textContent))?.click()", true).catch(() => {}), 10000);

@@ -42,6 +42,20 @@
   .tile span { max-width:100%; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
   #err { display:none; width:min(640px, 92vw); padding:16px 18px; background:var(--panel); border:1px solid var(--red); font-family:STM; color:#ffb0b6; }
   #err h2 { font-family:Orbitron; color:var(--red); font-size:16px; letter-spacing:3px; margin:0 0 8px; }
+  #cert { display:none; width:min(700px, 94vw); padding:20px 22px; background:var(--panel); border:1px solid var(--red); font-family:STM; color:#ffb0b6;
+          clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px); box-shadow:0 0 30px rgba(255,45,61,.25); }
+  #cert h2 { font-family:Orbitron; color:var(--red); font-size:18px; letter-spacing:3px; margin:0 0 10px; }
+  #cert p { margin:0 0 12px; color:#fff; font-family:Rajdhani, sans-serif; font-size:17px; }
+  #cert dl { display:grid; grid-template-columns:120px 1fr; gap:4px 10px; margin:0 0 14px; font-size:13px; }
+  #cert dt { color:var(--dim); } #cert dd { margin:0; color:var(--cyan); word-break:break-all; }
+  #cert label { display:flex; gap:8px; align-items:center; color:#fff; font-size:13px; margin-bottom:14px; cursor:pointer; }
+  #cert .btns { display:flex; gap:12px; flex-wrap:wrap; }
+  #cert button { font-family:Orbitron; font-size:13px; letter-spacing:2px; padding:10px 16px; border:1px solid var(--cyan); background:#0b1a20; color:var(--cyan); cursor:pointer;
+          clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px); }
+  #cert button:hover { background:var(--cyan); color:#000; }
+  #cert button.risk { border-color:var(--red); background:#200810; color:var(--red); }
+  #cert button.risk:hover { background:var(--red); color:#000; }
+  body.certmode .clock, body.certmode .date, body.certmode form, body.certmode #dial { display:none; }
   .foot { position:fixed; bottom:12px; font-family:STM; font-size:11px; color:var(--dim); letter-spacing:2px; }
 </style>
 </head>
@@ -51,6 +65,23 @@
     <div id="grid"></div>
   </div>
   <div id="err"><h2>// VERBINDUNG FEHLGESCHLAGEN</h2><div id="errtxt"></div></div>
+  <div id="cert">
+    <h2>// ZERTIFIKAT NICHT VERTRAUENSWÜRDIG</h2>
+    <p>Die Verbindung zu <b id="c_host"></b> ist verschlüsselt, aber das Zertifikat ist nicht von einer bekannten Stelle unterschrieben
+       (z.&nbsp;B. selbstsigniert wie bei FortiGate, Routern oder Lab-Servern). Fahre nur fort, wenn du dem Gerät vertraust.</p>
+    <dl>
+      <dt>Fehler</dt><dd id="c_err"></dd>
+      <dt>Ausgestellt für</dt><dd id="c_sub"></dd>
+      <dt>Aussteller</dt><dd id="c_iss"></dd>
+      <dt>Gültig</dt><dd id="c_val"></dd>
+      <dt>Fingerabdruck</dt><dd id="c_fp"></dd>
+    </dl>
+    <label><input type="checkbox" id="remember"> Ausnahme für dieses Zertifikat merken (auch nach Neustart)</label>
+    <div class="btns">
+      <button id="certback">&lt; ZURÜCK</button>
+      <button id="certgo" class="risk">TROTZDEM FORTFAHREN (UNSICHER)</button>
+    </div>
+  </div>
   <div class="clock" id="clock" data-t="00:00">00:00</div>
   <div class="date" id="date"></div>
   <form action="https://duckduckgo.com/" method="get" autocomplete="off">
@@ -93,6 +124,19 @@ if (hp.get('error')) {
   document.getElementById('err').style.display = 'block';
   document.getElementById('errtxt').textContent = `${hp.get('error')}\n${hp.get('url') || ''}`;
   document.title = 'Fehler';
+}
+// Zertifikats-Warnseite
+if (hp.get('cert') && window.netrunnerPage) {
+  document.body.classList.add('certmode');
+  document.getElementById('cert').style.display = 'block';
+  const set = (id, v) => { document.getElementById(id).textContent = v || '–'; };
+  set('c_host', hp.get('host')); set('c_err', hp.get('cert')); set('c_sub', hp.get('subject'));
+  set('c_iss', hp.get('issuer')); set('c_fp', hp.get('fp'));
+  set('c_val', hp.get('from') || hp.get('to') ? `${hp.get('from')} – ${hp.get('to')}` : '');
+  document.title = 'Zertifikat-Warnung';
+  document.getElementById('certback').onclick = () => netrunnerPage.certBack();
+  document.getElementById('certgo').onclick = () =>
+    netrunnerPage.certProceed(hp.get('url'), hp.get('fp'), document.getElementById('remember').checked);
 }
 // Schnellzugriffe = Lesezeichen
 fetch('bookmarks.json').then((r) => r.json()).then((bm) => {

@@ -19,3 +19,13 @@ if (/^https?:$/.test(location.protocol)) {
     webFrame.executeJavaScriptInIsolatedWorld(WORLD, [{ code: script }]);
   }).catch(() => {});
 }
+
+// Interne Seiten (netrunner://): nur die Knoepfe der Zertifikats-Warnseite.
+// Der Hauptprozess prueft zusaetzlich, dass die Anfrage von der internen Seite kommt
+// und der Fingerabdruck zum gerade abgelehnten Zertifikat passt.
+if (location.protocol === 'netrunner:') {
+  contextBridge.exposeInMainWorld('netrunnerPage', {
+    certProceed: (url, fp, remember) => ipcRenderer.send('cert-proceed', { url: String(url), fp: String(fp), remember: !!remember }),
+    certBack: () => ipcRenderer.send('cert-back'),
+  });
+}

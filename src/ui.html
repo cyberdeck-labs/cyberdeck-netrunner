@@ -112,8 +112,9 @@ function renderTabs() {
   $('fwd').classList.toggle('off', !t.canFwd);
   $('reload').textContent = t.loading ? '✕' : '⟳';
   const https = (t.url || '').startsWith('https://');
-  $('lock').textContent = t.url ? (https ? '🔒' : '⚠') : '';
-  $('lock').style.color = https ? '#5cff8a' : '#f7e733';
+  $('lock').textContent = t.url ? (t.certWarn ? '⚠ ZERT' : https ? '🔒' : '⚠') : '';
+  $('lock').style.color = t.certWarn ? '#ff2d3d' : https ? '#5cff8a' : '#f7e733';
+  $('lock').title = t.certWarn ? 'Zertifikat nicht vertrauenswürdig – Ausnahme aktiv (Menü ≡ → Zertifikat-Ausnahmen)' : '';
   const on = bookmarks.some((b) => b.url === t.url);
   $('star').textContent = on ? '★' : '☆';
   $('star').classList.toggle('on', on);
