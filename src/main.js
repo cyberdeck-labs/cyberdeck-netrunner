@@ -135,6 +135,122 @@ function forgetCertException(host) {
   pushTabs();
 }
 
+// ───────────── Import aus Firefox (Lesezeichen + Cookies) ─────────────
+// Liest eine KOPIE der Firefox-Datenbanken (geht auch, waehrend Firefox laeuft).
+// Passwoerter werden bewusst NICHT angefasst (dafuer gibt es Passwortmanager-Erweiterungen).
+function firefoxProfiles() {
+  const os = require('node:os');
+  const roots = process.platform === 'win32'
+    ? [path.join(process.env.APPDATA || '', 'Mozilla', 'Firefox')]
+    : [path.join(os.homedir(), '.config', 'mozilla', 'firefox'), path.join(os.homedir(), '.mozilla', 'firefox'),
+       path.join(os.homedir(), 'snap', 'firefox', 'common', '.mozilla', 'firefox'),
+       path.join(os.homedir(), '.var', 'app', 'org.mozilla.firefox', '.mozilla', 'firefox')];
+  const found = [];
+  for (const root of roots) {
+    let ini;
+    try { ini = fs.readFileSync(path.join(root, 'profiles.ini'), 'utf8'); } catch { continue; }
+    const secs = []; let cur = null;
+    for (const line of ini.split(/\r?\n/)) {
+      const m = line.match(/^\[(.+)\]$/);
+      if (m) { cur = { section: m[1] }; secs.push(cur); continue; }
+      const kv = line.match(/^([^=]+)=(.*)$/);
+      if (kv && cur) cur[kv[1].trim()] = kv[2].trim();
+    }
+    const installDefault = secs.find((x) => x.section.startsWith('Install') && x.Default)?.Default;
+    for (const x of secs.filter((y) => y.Path)) {
+      const dir = x.IsRelative === '0' ? x.Path : path.join(root, x.Path);
+      if (!fs.existsSync(path.join(dir, 'places.sqlite'))) continue;
+      found.push({ name: x.Name || x.Path, dir, preferred: x.Path === installDefault || x.Default === '1' });
+    }
+  }
+  return found.sort((a, b) => (b.preferred - a.preferred) || (fs.statSync(path.join(b.dir, 'places.sqlite')).mtimeMs - fs.statSync(path.join(a.dir, 'places.sqlite')).mtimeMs));
+}
+function copyDb(dir, name, tmp) {
+  const src = path.join(dir, name);
+  if (!fs.existsSync(src)) return null;
+  for (const ext of ['', '-wal']) if (fs.existsSync(src + ext)) fs.copyFileSync(src + ext, path.join(tmp, name + ext));
+  return path.join(tmp, name);
+}
+async function importFirefox(opts = {}) {
+  const profiles = firefoxProfiles();
+  if (!profiles.length) {
+    if (!opts.silent) dialog.showMessageBox(win, { type: 'info', title: 'Firefox-Import', message: 'Kein Firefox-Profil gefunden.' });
+    return null;
+  }
+  const prof = profiles[0];
+  if (!opts.silent) {
+    const { response } = await dialog.showMessageBox(win, {
+      type: 'question', title: 'Firefox-Import',
+      message: 'Lesezeichen und Cookies aus Firefox übernehmen?',
+      detail: `Profil: ${prof.name}\n${prof.dir}\n\nCookies = du bleibst auf Webseiten angemeldet. Passwörter werden nicht übernommen.`,
+      buttons: ['Importieren', 'Abbrechen'], defaultId: 0, cancelId: 1,
+    });
+    if (response !== 0) return null;
+  }
+  const { DatabaseSync } = require('node:sqlite');
+  const tmp = fs.mkdtempSync(path.join(app.getPath('temp'), 'netrunner-ff-'));
+  const res = { profile: prof.dir, bookmarks: 0, cookies: 0, cookieErrors: 0 };
+  try {
+    // Lesezeichen: erst Symbolleiste, dann Menue/Sonstige; Mozilla-Standardlinks weglassen
+    const places = copyDb(prof.dir, 'places.sqlite', tmp);
+    const db = new DatabaseSync(places, { readOnly: true });
+    const rows = db.prepare(`WITH RECURSIVE t(id, root) AS (
+        SELECT id, guid FROM moz_bookmarks WHERE guid IN ('toolbar_____','menu________','unfiled_____','mobile______')
+        UNION ALL SELECT b.id, t.root FROM moz_bookmarks b JOIN t ON b.parent = t.id)
+      SELECT b.title AS title, p.url AS url, t.root AS root FROM t
+        JOIN moz_bookmarks b ON b.id = t.id JOIN moz_places p ON p.id = b.fk
+      WHERE b.type = 1 AND p.url LIKE 'http%'
+      ORDER BY CASE t.root WHEN 'toolbar_____' THEN 0 ELSE 1 END, b.position`).all();
+    db.close();
+    for (const r of rows) {
+      if (/^https?:\/\/(support\.mozilla\.org|www\.mozilla\.org)\//.test(r.url)) continue;
+      if (bookmarks.some((b) => b.url === r.url)) continue;
+      bookmarks.push({ title: (r.title || new URL(r.url).hostname).slice(0, 40), url: r.url });
+      res.bookmarks++;
+    }
+    saveBookmarks(); send('bookmarks', bookmarks);
+    // Cookies (ohne Container/partitionierte Cookies, ohne abgelaufene)
+    const cpath = copyDb(prof.dir, 'cookies.sqlite', tmp);
+    if (cpath) {
+      const cdb = new DatabaseSync(cpath, { readOnly: true });
+      const cookies = cdb.prepare("SELECT name, value, host, path, expiry, isSecure, isHttpOnly, sameSite FROM moz_cookies WHERE originAttributes = ''").all();
+      cdb.close();
+      const now = Date.now() / 1000;
+      const ses = session.defaultSession;
+      for (const c of cookies) {
+        let exp = Number(c.expiry);
+        if (exp > 1e11) exp /= 1000; // neuere Firefox-Versionen speichern Millisekunden
+        if (exp && exp < now) continue;
+        const host = String(c.host).replace(/^\./, '');
+        const secure = !!c.isSecure;
+        const sameSite = c.sameSite === 2 ? 'strict' : c.sameSite === 1 ? 'lax' : (secure ? 'no_restriction' : 'lax');
+        try {
+          await ses.cookies.set({
+            url: `${secure ? 'https' : 'http'}://${host}${c.path || '/'}`,
+            name: c.name, value: c.value, path: c.path || '/',
+            ...(String(c.host).startsWith('.') ? { domain: c.host } : {}),
+            secure, httpOnly: !!c.isHttpOnly, sameSite, ...(exp ? { expirationDate: exp } : {}),
+          });
+          res.cookies++;
+        } catch { res.cookieErrors++; }
+      }
+      await ses.cookies.flushStore();
+    }
+  } catch (err) {
+    res.error = String(err.message || err);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+  if (!opts.silent) {
+    dialog.showMessageBox(win, {
+      type: res.error ? 'error' : 'info', title: 'Firefox-Import',
+      message: res.error ? 'Import fehlgeschlagen' : 'Import abgeschlossen',
+      detail: res.error || `${res.bookmarks} Lesezeichen übernommen\n${res.cookies} Cookies übernommen${res.cookieErrors ? ` (${res.cookieErrors} übersprungen)` : ''}\n\nOffene Tabs neu laden, damit die Anmeldungen greifen.`,
+    });
+  }
+  return res;
+}
+
 // ───────────── Cookie-Banner automatisch ablehnen (DuckDuckGo Autoconsent) ─────────────
 let acScript = null;
 let acRules = null;
@@ -552,6 +668,7 @@ function setupIpc() {
       { label: 'Neuer Tab        Strg+T', click: () => createTab() },
       { label: 'Lesezeichen setzen  Strg+D', click: () => toggleBookmark() },
       { label: 'Downloads-Ordner öffnen', click: () => shell.openPath(app.getPath('downloads')) },
+      { label: 'Von Firefox importieren …', click: () => importFirefox() },
       { type: 'separator' },
       { label: 'Cookie-Banner automatisch ablehnen', type: 'checkbox', checked: settings.cookieBlock,
         click: (mi) => { settings.cookieBlock = mi.checked; saveSettings(); send('cookie-mode', settings.cookieBlock); } },
@@ -617,6 +734,12 @@ app.whenReady().then(async () => {
   layout();
   if (process.env.NETRUNNER_CLICKEXT) { // Test-Hook: erstes Erweiterungs-Symbol anklicken
     setTimeout(() => ui.webContents.executeJavaScript("document.querySelector('browser-action-list').shadowRoot.querySelector('.action')?.dispatchEvent(new MouseEvent('click', {bubbles: true}))").catch(() => {}), 7000);
+  }
+  if (process.env.NETRUNNER_IMPORTFF) { // Test-Hook: Firefox-Import ohne Dialoge
+    const r = await importFirefox({ silent: true });
+    console.log('IMPORTFF', JSON.stringify(r));
+    const n = (await session.defaultSession.cookies.get({})).length;
+    console.log('COOKIES-IN-SESSION', n);
   }
   if (process.env.NETRUNNER_THEN) setTimeout(() => active()?.view.webContents.loadURL(process.env.NETRUNNER_THEN), 4000); // Test-Hook
   if (process.env.NETRUNNER_CERTGO) { // Test-Hook: Knopf auf der Zertifikats-Warnseite (once|remember|back)

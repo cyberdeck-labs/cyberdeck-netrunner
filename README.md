@@ -7,6 +7,7 @@ Chromium-Browser im Cyberpunk-Stil (Electron) – Teil der Cyberdeck-Reihe (Play
 - Werbe- und Tracker-Blocker (Ghostery-Engine, inkl. Cookie-Hinweis-Listen)
 - Cookie-Banner automatisch ablehnen (DuckDuckGo Autoconsent) – im Menü abschaltbar
 - Selbstsignierte Zertifikate (FortiGate, Router, Lab-Server): Warnseite mit Details, „Trotzdem fortfahren“ nur per Klick, Ausnahme gilt nur für genau dieses Zertifikat (optional dauerhaft, im Menü ≡ entfernbar)
+- Import aus Firefox (Menü ≡ → Von Firefox importieren): Lesezeichen und Cookies (angemeldet bleiben), keine Passwörter
 - Chrome-Erweiterungen aus dem Chrome Web Store (electron-chrome-extensions / -web-store), Symbole in der Leiste, Verwaltung im Menü ≡ → Erweiterungen
 - Auto-Update: Linux (AppImage) + Windows (Installer) über GitHub-Releases
 - Täglicher Chromium-Check (`.github/workflows/chromium-update.yml`): neues Electron → neue Version → Release
