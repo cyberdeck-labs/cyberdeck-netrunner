@@ -1,7 +1,7 @@
 {
   "name": "cyberdeck-netrunner",
   "productName": "Cyberdeck Netrunner",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Chromium-Browser im Cyberpunk-Stil (Electron)",
   "main": "src/main.js",
   "author": "Cyberdeck Labs",
@@ -13,7 +13,7 @@
     "dist:win": "electron-builder --win nsis"
   },
   "devDependencies": {
-    "electron": "^45.0.0",
+    "electron": "^45.1.0",
     "electron-builder": "^26.15.3"
   },
   "dependencies": {
