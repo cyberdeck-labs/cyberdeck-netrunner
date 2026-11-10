@@ -1,25 +1,25 @@
 # Cyberdeck Netrunner
 
-Chromium-Browser im Cyberpunk-Stil (Electron) – Teil der Cyberdeck-Reihe (Player, Launcher).
+Cyberpunk-styled Chromium browser (Electron) – part of the Cyberdeck series (Player, Launcher).
 
-- Tabs, Adresszeile `> run` (URL oder DuckDuckGo-Suche), Lesezeichenleiste, Downloads
-- Neuer-Tab-Seite im HUD-Stil (Uhr, Suche, Schnellzugriffe)
-- Werbe- und Tracker-Blocker (Ghostery-Engine, inkl. Cookie-Hinweis-Listen)
-- Cookie-Banner automatisch ablehnen (DuckDuckGo Autoconsent) – im Menü abschaltbar
-- Selbstsignierte Zertifikate (FortiGate, Router, Lab-Server): Warnseite mit Details, „Trotzdem fortfahren“ nur per Klick, Ausnahme gilt nur für genau dieses Zertifikat (optional dauerhaft, im Menü ≡ entfernbar)
-- Import aus Firefox (Menü ≡ → Von Firefox importieren): Lesezeichen und Cookies (angemeldet bleiben), keine Passwörter
-- Chrome-Erweiterungen aus dem Chrome Web Store (electron-chrome-extensions / -web-store), Symbole in der Leiste, Verwaltung im Menü ≡ → Erweiterungen
-- Auto-Update: Linux (AppImage) + Windows (Installer) über GitHub-Releases
-- Täglicher Chromium-Check (`.github/workflows/chromium-update.yml`): neues Electron → neue Version → Release
+- Tabs, `> run` address bar (URL or DuckDuckGo search), bookmarks bar, downloads
+- HUD-style new tab page (clock, search, quick links)
+- Ad and tracker blocker (Ghostery engine, incl. cookie notice lists)
+- Automatically rejects cookie banners (DuckDuckGo Autoconsent) – can be turned off in the menu
+- Self-signed certificates (FortiGate, routers, lab servers): warning page with details, "Proceed anyway" only by click, the exception applies only to exactly that certificate (optionally permanent, removable in menu ≡)
+- Import from Firefox (menu ≡ → Import from Firefox): bookmarks and cookies (stay logged in), no passwords
+- Chrome extensions from the Chrome Web Store (electron-chrome-extensions / -web-store), icons in the toolbar, management in menu ≡ → Extensions
+- Auto-update: Linux (AppImage) + Windows (installer) via GitHub Releases
+- Daily Chromium check (`.github/workflows/chromium-update.yml`): new Electron → new version → release
 
-## Tastenkürzel
-Strg+T neuer Tab · Strg+W schließen · Strg+Tab wechseln · Strg+L Adresse · Strg+R neu laden ·
-Strg+D Lesezeichen · Alt+←/→ zurück/vor · Strg +/−/0 Zoom · F12 Entwicklertools
+## Shortcuts
+Ctrl+T new tab · Ctrl+W close · Ctrl+Tab switch · Ctrl+L address · Ctrl+R reload ·
+Ctrl+D bookmark · Alt+←/→ back/forward · Ctrl +/−/0 zoom · F12 developer tools
 
-## Entwickeln
+## Development
     npm install
-    npm start                 # Dev-Start
-    npm run dist:linux        # AppImage nach dist/
+    npm start                 # dev start
+    npm run dist:linux        # AppImage into dist/
 
-## Lizenz
-GPL-3.0 (wegen electron-chrome-extensions).
+## License
+GPL-3.0 (because of electron-chrome-extensions).
