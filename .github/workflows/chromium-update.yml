@@ -13,9 +13,11 @@ permissions:
 jobs:
   bump:
     runs-on: ubuntu-latest
+    outputs:
+      ver: ${{ steps.bump.outputs.ver }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
       - name: Neues Electron?
@@ -25,10 +27,9 @@ jobs:
           NEW=$(npm view electron version)
           echo "Installiert: $CUR  Neueste: $NEW"
           if [ "$CUR" != "$NEW" ]; then echo "new=$NEW" >> "$GITHUB_OUTPUT"; fi
-      - name: Aktualisieren, taggen, Release starten
+      - name: Aktualisieren und taggen
+        id: bump
         if: steps.check.outputs.new != ''
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           npm install --save-dev "electron@${{ steps.check.outputs.new }}"
           VER=$(npm version patch --no-git-tag-version | tr -d v)
@@ -37,5 +38,13 @@ jobs:
           git commit -am "Chromium-Update: Electron ${{ steps.check.outputs.new }} (v$VER)"
           git tag "v$VER"
           git push origin HEAD "v$VER"
-          # Tags von GITHUB_TOKEN loesen keine Workflows aus -> Release direkt starten
-          gh workflow run release.yml --ref "v$VER"
+          echo "ver=$VER" >> "$GITHUB_OUTPUT"
+  # Release als wiederverwendbarer Workflow statt "gh workflow run" (das ist am 25.11. fehlgeschlagen
+  # und hat v0.3.13 ohne Release zurueckgelassen). Tags von GITHUB_TOKEN loesen keine Workflows aus.
+  release:
+    needs: bump
+    if: needs.bump.outputs.ver != ''
+    uses: ./.github/workflows/release.yml
+    with:
+      ref: v${{ needs.bump.outputs.ver }}
+    secrets: inherit
